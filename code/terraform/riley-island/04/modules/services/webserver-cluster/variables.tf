@@ -13,6 +13,24 @@ variable "db_remote_state_key" {
   type        = string
 }
 
+variable "instance_type" {
+  default     = "t2.micro"
+  description = "The type of EC2 instances to run (e.g. t2.micro)"
+  type        = string
+}
+
+variable "min_size" {
+  default     = 2
+  description = "The minimum number of EC2 instances in the ASG"
+  type        = number
+}
+
+variable "max_size" {
+  default     = 2
+  description = "The maximum number of EC2 instances in the ASG"
+  type        = number
+}
+
 variable "server_port" {
   default     = 8080
   description = "The port the server will use for HTTP requests"

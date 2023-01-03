@@ -1,6 +1,6 @@
 resource "aws_launch_configuration" "example" {
   image_id        = "ami-0283a57753b18025b"
-  instance_type   = "t2.micro"
+  instance_type   = var.instance_type
   security_groups = [aws_security_group.instance.id]
 
   user_data = templatefile("${path.module}/user-data.sh", {
@@ -16,18 +16,17 @@ resource "aws_launch_configuration" "example" {
 }
 
 resource "aws_autoscaling_group" "example" {
+  health_check_type    = "ELB"
   launch_configuration = aws_launch_configuration.example.name
+  target_group_arns    = [aws_lb_target_group.asg.arn]
   vpc_zone_identifier  = data.aws_subnets.default.ids
 
-  target_group_arns = [aws_lb_target_group.asg.arn]
-  health_check_type = "ELB"
-
-  min_size = 2
-  max_size = 10
+  min_size = var.min_size
+  max_size = var.max_size
 
   tag {
     key                 = "Name"
-    value               = "${var.cluster_name}-asg"
+    value               = var.cluster_name
     propagate_at_launch = true
   }
 }
@@ -38,8 +37,8 @@ resource "aws_security_group" "instance" {
   ingress {
     from_port   = var.server_port
     to_port     = var.server_port
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    protocol    = local.tcp_protocol
+    cidr_blocks = local.all_ips
   }
 }
 
@@ -53,7 +52,7 @@ resource "aws_lb" "example" {
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.example.arn
-  port              = 80
+  port              = local.http_port
   protocol          = "HTTP"
 
   # By default, return a simple 404 page
@@ -104,20 +103,24 @@ resource "aws_lb_listener_rule" "asg" {
 
 resource "aws_security_group" "alb" {
   name = "${var.cluster_name}-alb"
+}
 
-  # Allow inbound HTTP requests
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_security_group_rule" "allow_http_inbound" {
+  type              = "ingress"
+  security_group_id = aws_security_group.alb.id
 
-  # Allow all outbound requests
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  from_port   = local.http_port
+  to_port     = local.http_port
+  protocol    = local.tcp_protocol
+  cidr_blocks = local.all_ips
+}
+
+resource "aws_security_group_rule" "allow_all_outbound" {
+  type              = "egress"
+  security_group_id = aws_security_group.alb.id
+
+  from_port   = local.any_port
+  to_port     = local.any_port
+  protocol    = local.any_protocol
+  cidr_blocks = local.all_ips
 }
